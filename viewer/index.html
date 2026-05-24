@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Departures</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  .suggestions { position: absolute; top: 100%; left: 0; right: 0; z-index: 10; display: none; }
+  .suggestions .list-group-item { cursor: pointer; }
+  .suggestions .list-group-item.active { background: #e8f0fe; color: inherit; border-color: #dee2e6; }
+  tr.past td { color: #adb5bd; }
+  tr.now-marker td { text-align: center; font-size: .8rem; }
+  tr.canceled td { text-decoration: line-through; }
+  .delay { font-weight: 600; }
+</style>
+</head>
+<body class="bg-light">
+
+<div class="container py-4" style="max-width: 900px">
+  <h1 class="h4 mb-3">Departures</h1>
+
+  <div class="position-relative mb-3">
+    <input id="station-input" class="form-control" type="text" placeholder="Search station..." autocomplete="off">
+    <div class="suggestions list-group" id="suggestions"></div>
+  </div>
+
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <button id="refresh-btn" class="btn btn-sm btn-outline-secondary d-none">Refresh</button>
+    <small class="text-muted" id="status"></small>
+  </div>
+
+  <div id="results"></div>
+</div>
+
+<script>
+const CH_URL = 'http://localhost:8123/';
+
+const state = {
+  parentStation: '',
+  stationName: '',
+};
+
+// --- URL hash persistence ---
+
+function saveHash() {
+  if (state.parentStation) {
+    location.hash = encodeURIComponent(state.parentStation) + '/' + encodeURIComponent(state.stationName);
+  }
+}
+
+function loadHash() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (!h) return;
+  const sep = h.indexOf('/');
+  if (sep < 0) return;
+  state.parentStation = h.slice(0, sep);
+  state.stationName = h.slice(sep + 1);
+  stationInput.value = state.stationName;
+  loadDepartures();
+}
+
+window.addEventListener('hashchange', loadHash);
+
+// --- ClickHouse HTTP API ---
+
+function chQuery(sql, params = {}) {
+  const url = new URL(CH_URL);
+  url.searchParams.set('add_http_cors_header', '1');
+  url.searchParams.set('default_format', 'JSON');
+  for (const [k, v] of Object.entries(params)) {
+    url.searchParams.set('param_' + k, v);
+  }
+  return fetch(url, { method: 'POST', body: sql })
+    .then(r => { if (!r.ok) return r.text().then(t => { throw new Error(t) }); return r.json(); })
+    .then(j => j.data);
+}
+
+// --- Filters (extensible) ---
+
+function buildFilters() {
+  const conditions = [];
+  const params = {};
+  conditions.push('d.parent_station = {parent_station:String}');
+  params.parent_station = state.parentStation;
+  return { where: conditions.join(' AND '), params };
+}
+
+// --- Autocomplete ---
+
+const stationInput = document.getElementById('station-input');
+const suggestionsEl = document.getElementById('suggestions');
+let debounceTimer = null;
+let activeIdx = -1;
+
+stationInput.addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  const q = stationInput.value.trim();
+  if (q.length < 2) { hideSuggestions(); return; }
+  debounceTimer = setTimeout(() => searchStations(q), 250);
+});
+
+stationInput.addEventListener('keydown', (e) => {
+  const items = suggestionsEl.children;
+  if (!items.length) return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, items.length - 1); highlightSuggestion(items); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); highlightSuggestion(items); }
+  else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); items[activeIdx].click(); }
+  else if (e.key === 'Escape') { hideSuggestions(); }
+});
+
+function highlightSuggestion(items) {
+  for (let i = 0; i < items.length; i++) items[i].classList.toggle('active', i === activeIdx);
+}
+
+function searchStations(q) {
+  const sql = `SELECT DISTINCT stop_id, stop_name FROM gtfs.stops WHERE location_type = '1' AND stop_name ILIKE {search:String} ORDER BY stop_name LIMIT 15`;
+  chQuery(sql, { search: '%' + q + '%' }).then(rows => {
+    suggestionsEl.innerHTML = '';
+    activeIdx = -1;
+    if (!rows.length) { hideSuggestions(); return; }
+    rows.forEach(r => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'list-group-item list-group-item-action';
+      item.textContent = r.stop_name;
+      item.addEventListener('click', () => selectStation(r.stop_id, r.stop_name));
+      suggestionsEl.appendChild(item);
+    });
+    suggestionsEl.style.display = 'block';
+  }).catch(() => hideSuggestions());
+}
+
+function hideSuggestions() {
+  suggestionsEl.style.display = 'none';
+  suggestionsEl.innerHTML = '';
+  activeIdx = -1;
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.position-relative')) hideSuggestions();
+});
+
+function selectStation(stopId, name) {
+  state.parentStation = stopId;
+  state.stationName = name;
+  stationInput.value = name;
+  hideSuggestions();
+  saveHash();
+  loadDepartures();
+}
+
+// --- Departures ---
+
+function nowTimeStr() {
+  const d = new Date();
+  return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
+}
+
+function departureSQL(direction) {
+  const { where, params } = buildFilters();
+  const op = direction === 'past' ? '<' : '>=';
+  const order = direction === 'past' ? 'DESC' : 'ASC';
+  const limit = direction === 'past' ? 5 : 10;
+
+  const sql = `
+WITH active_services AS (
+    SELECT service_id, feed_version FROM gtfs.calendar_by_day
+    WHERE day_of_week = toDayOfWeek(today()) AND start_date <= today() AND end_date >= today()
+    UNION ALL
+    SELECT service_id, feed_version FROM gtfs.calendar_dates
+    WHERE date = today() AND exception_type = 1
+),
+removed_services AS (
+    SELECT service_id, feed_version FROM gtfs.calendar_dates
+    WHERE date = today() AND exception_type = 2
+),
+latest_rt AS (
+    SELECT max(feed_timestamp) AS ts FROM gtfs_rt.trip_updates
+)
+SELECT
+    d.departure_time AS departure_time,
+    d.route_short_name AS route,
+    d.route_desc AS type,
+    d.trip_headsign AS direction,
+    d.platform_code AS platform,
+    if(tu.schedule_relationship = 'CANCELED', 'CANCELED',
+       if(stu.departure_delay > 0, concat('+', toString(round(stu.departure_delay / 60))), '')) AS delay,
+    stu.departure_delay AS delay_seconds
+FROM gtfs.departures d
+JOIN active_services a ON d.feed_version = a.feed_version AND d.service_id = a.service_id
+LEFT ANTI JOIN removed_services rm ON d.feed_version = rm.feed_version AND d.service_id = rm.service_id
+LEFT JOIN gtfs_rt.trip_updates tu ON d.feed_version = tu.feed_version AND d.trip_id = tu.trip_id AND tu.feed_timestamp = (SELECT ts FROM latest_rt)
+LEFT JOIN gtfs_rt.stop_time_updates stu ON d.feed_version = stu.feed_version AND d.trip_id = stu.trip_id AND d.stop_id = stu.stop_id AND stu.feed_timestamp = (SELECT ts FROM latest_rt)
+WHERE ${where}
+  AND d.departure_time ${op} {now_time:String}
+ORDER BY d.departure_time ${order}
+LIMIT ${limit}`;
+
+  return { sql, params: { ...params, now_time: nowTimeStr() } };
+}
+
+function loadDepartures() {
+  if (!state.parentStation) return;
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = 'Loading...';
+
+  const past = departureSQL('past');
+  const next = departureSQL('next');
+
+  Promise.all([
+    chQuery(past.sql, past.params),
+    chQuery(next.sql, next.params),
+  ]).then(([pastRows, nextRows]) => {
+    pastRows.reverse();
+    renderTable(pastRows, nextRows);
+    statusEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+    document.getElementById('refresh-btn').classList.remove('d-none');
+  }).catch(err => {
+    document.getElementById('results').innerHTML = `<div class="text-center text-muted py-4">Error: ${err.message}</div>`;
+    statusEl.textContent = '';
+  });
+}
+
+function renderTable(pastRows, nextRows) {
+  const el = document.getElementById('results');
+  if (!pastRows.length && !nextRows.length) {
+    el.innerHTML = '<div class="text-center text-muted py-4">No departures found</div>';
+    return;
+  }
+
+  let html = '<table class="table table-sm table-hover mb-0"><thead class="table-dark"><tr><th>Time</th><th>Route</th><th>Type</th><th>Direction</th><th>Pl.</th><th>Delay</th></tr></thead><tbody>';
+
+  pastRows.forEach(r => {
+    const cls = r.delay === 'CANCELED' ? 'past canceled' : 'past';
+    html += `<tr class="${cls}"><td>${fmtTime(r.departure_time)}</td><td>${esc(r.route)}</td><td>${esc(r.type)}</td><td>${esc(r.direction)}</td><td>${esc(r.platform || '')}</td><td class="delay text-danger">${esc(r.delay)}</td></tr>`;
+  });
+
+  html += '<tr class="now-marker table-primary"><td colspan="6">now</td></tr>';
+
+  nextRows.forEach(r => {
+    const cls = r.delay === 'CANCELED' ? 'canceled' : '';
+    html += `<tr class="${cls}"><td>${fmtTime(r.departure_time)}</td><td>${esc(r.route)}</td><td>${esc(r.type)}</td><td>${esc(r.direction)}</td><td>${esc(r.platform || '')}</td><td class="delay text-danger">${esc(r.delay)}</td></tr>`;
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function fmtTime(t) {
+  return t ? t.substring(0, 5) : '';
+}
+
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// --- Auto-refresh ---
+
+let refreshTimer = null;
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  refreshTimer = setInterval(() => {
+    if (!document.hidden && state.parentStation) loadDepartures();
+  }, 30000);
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && state.parentStation) loadDepartures();
+});
+
+document.getElementById('refresh-btn').addEventListener('click', loadDepartures);
+
+startAutoRefresh();
+loadHash();
+</script>
+</body>
+</html>
