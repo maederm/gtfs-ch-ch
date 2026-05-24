@@ -28,6 +28,7 @@
   <div class="d-flex align-items-center gap-2 mb-2">
     <button id="refresh-btn" class="btn btn-sm btn-outline-secondary d-none">Refresh</button>
     <small class="text-muted" id="status"></small>
+    <small class="text-muted ms-auto" id="feed-info"></small>
   </div>
 
   <div id="results"></div>
@@ -211,11 +212,18 @@ function loadDepartures() {
   Promise.all([
     chQuery(past.sql, past.params),
     chQuery(next.sql, next.params),
-  ]).then(([pastRows, nextRows]) => {
+    chQuery(`SELECT
+      toString(max(feed_version)) AS feed_version,
+      toString((SELECT max(feed_timestamp) FROM gtfs_rt.trip_updates)) AS feed_timestamp
+    FROM gtfs.departures`),
+  ]).then(([pastRows, nextRows, metaRows]) => {
     pastRows.reverse();
     renderTable(pastRows, nextRows);
     statusEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
     document.getElementById('refresh-btn').classList.remove('d-none');
+    const meta = metaRows[0] || {};
+    document.getElementById('feed-info').textContent =
+      `Feed: ${meta.feed_version || '?'} | RT: ${meta.feed_timestamp || '?'}`;
   }).catch(err => {
     document.getElementById('results').innerHTML = `<div class="text-center text-muted py-4">Error: ${err.message}</div>`;
     statusEl.textContent = '';
