@@ -12,21 +12,18 @@ FEED_VERSION=$(awk -F',' 'NR==2 { gsub(/"/, "", $6); print $6 }' "$DATA_DIR/feed
 echo "=== Feed version: $FEED_VERSION ==="
 
 echo "=== Creating database ==="
-$CH_CLIENT --query="$(cat "$CH_DIR/init.sql")"
+$CH_CLIENT --query="$(cat "$CH_DIR/gtfs_init.sql")"
 
 echo "=== Creating tables ==="
-for sql in "$CH_DIR/tables/"*.sql; do
-    [[ "$(basename "$sql")" == rt_* ]] && continue
-    table=$(basename "$sql" .sql)
-    echo "  Creating gtfs.$table"
+for sql in "$CH_DIR/tables/gtfs_"*.sql; do
+    echo "  $(basename "$sql" .sql)"
     $CH_CLIENT --queries-file="$sql"
 done
 
 echo "=== Creating materialized views ==="
-for sql in "$CH_DIR/materialized_views/"*.sql; do
+for sql in "$CH_DIR/materialized_views/gtfs_"*.sql; do
     [ -f "$sql" ] || continue
-    view=$(basename "$sql" .sql)
-    echo "  Creating gtfs.$view"
+    echo "  $(basename "$sql" .sql)"
     $CH_CLIENT --queries-file="$sql"
 done
 
@@ -69,9 +66,8 @@ load_table transfers        transfers.txt
 
 echo ""
 echo "=== Row counts ==="
-for sql in "$CH_DIR/tables/"*.sql; do
-    [[ "$(basename "$sql")" == rt_* ]] && continue
-    table=$(basename "$sql" .sql)
+for sql in "$CH_DIR/tables/gtfs_"*.sql; do
+    table=$(basename "$sql" .sql | sed 's/^gtfs_//')
     count=$($CH_CLIENT --query="SELECT count() FROM gtfs.$table")
     printf "  %-20s %s\n" "gtfs.$table" "$count"
 done

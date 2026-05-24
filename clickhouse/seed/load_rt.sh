@@ -21,12 +21,11 @@ mkdir -p "$CH_DATA/user_files"
 cp "$PB_FILE" "$CH_DATA/user_files/$PB_NAME"
 
 echo "=== Creating database ==="
-$CH_CLIENT --queries-file="$CH_DIR/init_rt.sql"
+$CH_CLIENT --queries-file="$CH_DIR/rt_gtfs_init.sql"
 
 echo "=== Creating tables ==="
-for sql in "$CH_DIR/tables/rt_"*.sql; do
-    table=$(basename "$sql" .sql)
-    echo "  Creating $table"
+for sql in "$CH_DIR/tables/rt_gtfs_"*.sql; do
+    echo "  $(basename "$sql" .sql)"
     $CH_CLIENT --queries-file="$sql"
 done
 
