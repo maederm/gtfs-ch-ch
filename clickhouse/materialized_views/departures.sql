@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS gtfs.departures
 (
     feed_version   String,
+    trip_id        String,
     departure_time String,
     arrival_time   String,
     service_id     String,
@@ -20,6 +21,7 @@ TO gtfs.departures
 AS
 SELECT
     st.feed_version AS feed_version,
+    st.trip_id AS trip_id,
     st.departure_time AS departure_time,
     st.arrival_time AS arrival_time,
     t.service_id AS service_id,

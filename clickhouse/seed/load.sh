@@ -8,7 +8,7 @@ DATA_DIR="$PROJECT_DIR/data/gtfs_fp2026_20260520"
 
 CH_CLIENT="${CH_CLIENT:-clickhouse-client}"
 
-FEED_VERSION=$(awk -F',' 'NR==2 { gsub(/"/, "", $6); print $6 }' "$DATA_DIR/feed_info.txt")
+FEED_VERSION=$(awk -F',' 'NR==2 { gsub(/"/, "", $6); print $6 }' "$DATA_DIR/feed_info.txt" | tr -d '\r')
 echo "=== Feed version: $FEED_VERSION ==="
 
 echo "=== Creating database ==="
@@ -16,6 +16,7 @@ $CH_CLIENT --query="$(cat "$CH_DIR/init.sql")"
 
 echo "=== Creating tables ==="
 for sql in "$CH_DIR/tables/"*.sql; do
+    [[ "$(basename "$sql")" == rt_* ]] && continue
     table=$(basename "$sql" .sql)
     echo "  Creating gtfs.$table"
     $CH_CLIENT --queries-file="$sql"
@@ -39,20 +40,18 @@ load_table() {
     header=$(head -1 "$DATA_DIR/$file" | tr -d '\r"')
 
     if echo "$header" | grep -q 'feed_version'; then
-        $CH_CLIENT \
+        tr -d '\r' < "$DATA_DIR/$file" | $CH_CLIENT \
             --date_time_input_format=best_effort \
             --input_format_csv_empty_as_default=1 \
-            --query="INSERT INTO gtfs.$table FORMAT CSVWithNames" \
-            < "$DATA_DIR/$file"
+            --query="INSERT INTO gtfs.$table FORMAT CSVWithNames"
     else
         local input_schema
         input_schema=$(echo "$header" | sed 's/,/ String, /g; s/$/ String/')
 
-        $CH_CLIENT \
+        tr -d '\r' < "$DATA_DIR/$file" | $CH_CLIENT \
             --date_time_input_format=best_effort \
             --input_format_csv_empty_as_default=1 \
-            --query="INSERT INTO gtfs.$table SELECT '$FEED_VERSION' AS feed_version, * FROM input('$input_schema') FORMAT CSVWithNames" \
-            < "$DATA_DIR/$file"
+            --query="INSERT INTO gtfs.$table SELECT '$FEED_VERSION' AS feed_version, * FROM input('$input_schema') FORMAT CSVWithNames"
     fi
 }
 
@@ -71,6 +70,7 @@ load_table transfers        transfers.txt
 echo ""
 echo "=== Row counts ==="
 for sql in "$CH_DIR/tables/"*.sql; do
+    [[ "$(basename "$sql")" == rt_* ]] && continue
     table=$(basename "$sql" .sql)
     count=$($CH_CLIENT --query="SELECT count() FROM gtfs.$table")
     printf "  %-20s %s\n" "gtfs.$table" "$count"
