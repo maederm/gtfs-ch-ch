@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS gtfs_rt.alerts
 (
-    feed_version           String,
+    feed_version Date32,
     feed_timestamp         DateTime,
     entity_id              String,
     cause                  String,

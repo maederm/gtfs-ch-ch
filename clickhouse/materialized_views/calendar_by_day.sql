@@ -1,12 +1,13 @@
 CREATE TABLE IF NOT EXISTS gtfs.calendar_by_day
 (
-    feed_version String,
+    feed_version Date32,
     service_id   String,
     day_of_week  UInt8,
     start_date   Date32,
     end_date     Date32
 )
 ENGINE = MergeTree()
+PARTITION BY toYYYYMM(feed_version)
 ORDER BY (feed_version, service_id, day_of_week);
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS gtfs.calendar_by_day_mv

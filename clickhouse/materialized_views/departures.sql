@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS gtfs.departures
 (
-    feed_version   String,
+    feed_version Date32,
     trip_id        String,
     departure_time String,
     arrival_time   String,
@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS gtfs.departures
     platform_code  Nullable(String)
 )
 ENGINE = MergeTree()
+PARTITION BY toYYYYMM(feed_version)
 ORDER BY (feed_version, parent_station, departure_time);
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS gtfs.departures_mv

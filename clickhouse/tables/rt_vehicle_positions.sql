@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS gtfs_rt.vehicle_positions
 (
-    feed_version           String,
+    feed_version Date32,
     feed_timestamp         DateTime,
     trip_id                String,
     route_id               String,

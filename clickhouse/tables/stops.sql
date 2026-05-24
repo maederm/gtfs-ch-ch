@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS gtfs.stops
 (
-    feed_version     String,
+    feed_version Date32,
     stop_id          String,
     stop_name        String,
     stop_lat         Nullable(Float64),
@@ -11,4 +11,5 @@ CREATE TABLE IF NOT EXISTS gtfs.stops
     original_stop_id Nullable(String)
 )
 ENGINE = MergeTree()
+PARTITION BY toYYYYMM(feed_version)
 ORDER BY (feed_version, stop_id);

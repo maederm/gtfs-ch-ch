@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS gtfs.routes
 (
-    feed_version     String,
+    feed_version Date32,
     route_id         String,
     agency_id        String,
     route_short_name String,
@@ -9,4 +9,5 @@ CREATE TABLE IF NOT EXISTS gtfs.routes
     route_type       UInt16
 )
 ENGINE = MergeTree()
+PARTITION BY toYYYYMM(feed_version)
 ORDER BY (feed_version, route_id);

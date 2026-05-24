@@ -34,7 +34,7 @@ echo "=== Loading trip_updates ==="
 $CH_CLIENT -q "
 INSERT INTO gtfs_rt.trip_updates
 SELECT
-    header.feed_version,
+    parseDateTime32BestEffort(header.feed_version),
     header.timestamp,
     e.trip_update.trip.trip_id,
     e.trip_update.trip.route_id,
@@ -52,7 +52,7 @@ echo "=== Loading stop_time_updates ==="
 $CH_CLIENT -q "
 INSERT INTO gtfs_rt.stop_time_updates
 SELECT
-    header.feed_version,
+    parseDateTime32BestEffort(header.feed_version),
     header.timestamp,
     e.trip_update.trip.trip_id,
     stu.stop_id,
@@ -73,7 +73,7 @@ echo "=== Loading vehicle_positions ==="
 $CH_CLIENT -q "
 INSERT INTO gtfs_rt.vehicle_positions
 SELECT
-    header.feed_version,
+    parseDateTime32BestEffort(header.feed_version),
     header.timestamp,
     e.vehicle.trip.trip_id,
     e.vehicle.trip.route_id,
@@ -98,7 +98,7 @@ echo "=== Loading alerts ==="
 $CH_CLIENT -q "
 INSERT INTO gtfs_rt.alerts
 SELECT
-    header.feed_version,
+    parseDateTime32BestEffort(header.feed_version),
     header.timestamp,
     e.id,
     toString(e.alert.cause),

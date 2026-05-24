@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS gtfs.frequencies
 (
-    feed_version String,
+    feed_version Date32,
     trip_id      String,
     start_time   String,
     end_time     String,
@@ -8,4 +8,5 @@ CREATE TABLE IF NOT EXISTS gtfs.frequencies
     exact_times  UInt8
 )
 ENGINE = MergeTree()
+PARTITION BY toYYYYMM(feed_version)
 ORDER BY (feed_version, trip_id);

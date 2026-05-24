@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS gtfs_rt.stop_time_updates
 (
-    feed_version           String,
+    feed_version Date32,
     feed_timestamp         DateTime,
     trip_id                String,
     stop_id                String,

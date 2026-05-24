@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS gtfs.calendar
 (
-    feed_version String,
+    feed_version Date32,
     service_id String,
     monday     UInt8,
     tuesday    UInt8,
@@ -13,4 +13,5 @@ CREATE TABLE IF NOT EXISTS gtfs.calendar
     end_date   Date32
 )
 ENGINE = MergeTree()
+PARTITION BY toYYYYMM(feed_version)
 ORDER BY (feed_version, service_id);
