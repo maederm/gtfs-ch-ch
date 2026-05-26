@@ -18,7 +18,13 @@
 <body class="bg-light">
 
 <div class="container py-4" style="max-width: 900px">
-  <h1 class="h4 mb-3">Departures</h1>
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h4 mb-0">Departures</h1>
+    <div class="text-end">
+      <small class="text-muted" id="status"></small><br>
+      <small class="text-muted" id="feed-info"></small>
+    </div>
+  </div>
 
   <div class="position-relative mb-3">
     <input id="station-input" class="form-control" type="text" placeholder="Search station..." autocomplete="off">
@@ -26,9 +32,16 @@
   </div>
 
   <div class="d-flex align-items-center gap-2 mb-2">
-    <button id="refresh-btn" class="btn btn-sm btn-outline-secondary d-none">Refresh</button>
-    <small class="text-muted" id="status"></small>
-    <small class="text-muted ms-auto" id="feed-info"></small>
+    <select id="filter-type" class="form-select form-select-sm" style="width: auto">
+      <option value="">All types</option>
+    </select>
+    <select id="filter-route" class="form-select form-select-sm" style="width: auto">
+      <option value="">All routes</option>
+    </select>
+    <select id="filter-direction" class="form-select form-select-sm" style="width: auto">
+      <option value="">All directions</option>
+    </select>
+    <button id="refresh-btn" class="btn btn-sm btn-outline-secondary d-none ms-auto">Refresh</button>
   </div>
 
   <div id="results"></div>
@@ -74,19 +87,41 @@ const state = {
 
 function saveHash() {
   if (state.parentStation) {
-    location.hash = encodeURIComponent(state.parentStation) + '/' + encodeURIComponent(state.stationName);
+    const params = new URLSearchParams();
+    params.set('station', state.parentStation);
+    const type = document.getElementById('filter-type').value;
+    const route = document.getElementById('filter-route').value;
+    const direction = document.getElementById('filter-direction').value;
+    if (type) params.set('type', type);
+    if (route) params.set('route', route);
+    if (direction) params.set('direction', direction);
+    location.hash = encodeURIComponent(state.stationName) + '?' + params.toString();
   }
 }
 
 function loadHash() {
-  const h = decodeURIComponent(location.hash.slice(1));
+  const h = location.hash.slice(1);
   if (!h) return;
-  const sep = h.indexOf('/');
-  if (sep < 0) return;
-  state.parentStation = h.slice(0, sep);
-  state.stationName = h.slice(sep + 1);
+  const qIdx = h.indexOf('?');
+  if (qIdx < 0) return;
+  state.stationName = decodeURIComponent(h.slice(0, qIdx));
+  const params = new URLSearchParams(h.slice(qIdx + 1));
+  if (!params.get('station')) return;
+  state.parentStation = params.get('station');
   stationInput.value = state.stationName;
-  loadDepartures();
+
+  const pending = {
+    type: params.get('type') || '',
+    route: params.get('route') || '',
+    direction: params.get('direction') || '',
+  };
+
+  loadFilterOptions().then(() => {
+    if (pending.type) document.getElementById('filter-type').value = pending.type;
+    if (pending.route) document.getElementById('filter-route').value = pending.route;
+    if (pending.direction) document.getElementById('filter-direction').value = pending.direction;
+    loadDepartures();
+  });
 }
 
 window.addEventListener('hashchange', loadHash);
@@ -112,6 +147,16 @@ function buildFilters() {
   const params = {};
   conditions.push('d.parent_station = {parent_station:String}');
   params.parent_station = state.parentStation;
+
+  const type = document.getElementById('filter-type').value;
+  if (type) { conditions.push('d.route_desc = {filter_type:String}'); params.filter_type = type; }
+
+  const route = document.getElementById('filter-route').value;
+  if (route) { conditions.push('d.route_short_name = {filter_route:String}'); params.filter_route = route; }
+
+  const direction = document.getElementById('filter-direction').value;
+  if (direction) { conditions.push('d.trip_headsign = {filter_direction:String}'); params.filter_direction = direction; }
+
   return { where: conditions.join(' AND '), params };
 }
 
@@ -191,7 +236,64 @@ function selectStation(stopId, name) {
   stationInput.value = name;
   hideSuggestions();
   saveHash();
+  loadFilterOptions();
   loadDepartures();
+}
+
+function loadFilterOptions() {
+  const conditions = ['parent_station = {ps:String}', 'feed_version = (SELECT max(feed_version) FROM gtfs.feed_info)'];
+  const params = { ps: state.parentStation };
+
+  const type = document.getElementById('filter-type').value;
+  if (type) { conditions.push('route_desc = {ft:String}'); params.ft = type; }
+
+  const route = document.getElementById('filter-route').value;
+  if (route) { conditions.push('route_short_name = {fr:String}'); params.fr = route; }
+
+  const direction = document.getElementById('filter-direction').value;
+  if (direction) { conditions.push('trip_headsign = {fd:String}'); params.fd = direction; }
+
+  const sql = `SELECT DISTINCT route_desc, route_short_name, trip_headsign FROM gtfs.departures WHERE ${conditions.join(' AND ')} ORDER BY route_desc, route_short_name, trip_headsign`;
+  return chQuery(sql, params).then(rows => {
+    const typeEl = document.getElementById('filter-type');
+    const routeEl = document.getElementById('filter-route');
+    const dirEl = document.getElementById('filter-direction');
+    const prevType = typeEl.value;
+    const prevRoute = routeEl.value;
+    const prevDir = dirEl.value;
+
+    typeEl.innerHTML = '<option value="">All types</option>';
+    routeEl.innerHTML = '<option value="">All routes</option>';
+    dirEl.innerHTML = '<option value="">All directions</option>';
+
+    const types = [...new Set(rows.map(r => r.route_desc))];
+    types.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = t;
+      typeEl.appendChild(opt);
+    });
+
+    const routes = [...new Set(rows.map(r => r.route_short_name))];
+    routes.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r;
+      opt.textContent = r;
+      routeEl.appendChild(opt);
+    });
+
+    const directions = [...new Set(rows.map(r => r.trip_headsign))];
+    directions.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = d;
+      dirEl.appendChild(opt);
+    });
+
+    typeEl.value = prevType;
+    routeEl.value = prevRoute;
+    dirEl.value = prevDir;
+  }).catch(() => {});
 }
 
 // --- Departures ---
@@ -344,6 +446,9 @@ document.addEventListener('visibilitychange', () => {
 });
 
 document.getElementById('refresh-btn').addEventListener('click', loadDepartures);
+document.getElementById('filter-type').addEventListener('change', () => { saveHash(); loadFilterOptions(); loadDepartures(); });
+document.getElementById('filter-route').addEventListener('change', () => { saveHash(); loadFilterOptions(); loadDepartures(); });
+document.getElementById('filter-direction').addEventListener('change', () => { saveHash(); loadFilterOptions(); loadDepartures(); });
 
 startAutoRefresh();
 loadHash();
