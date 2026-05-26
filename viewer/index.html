@@ -300,7 +300,14 @@ function loadFilterOptions() {
 
 function nowTimeStr() {
   const d = new Date();
-  return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
+  const h = d.getHours() < 4 ? d.getHours() + 24 : d.getHours();
+  return [h, d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
+}
+
+function serviceDate() {
+  const now = new Date();
+  if (now.getHours() < 4) now.setDate(now.getDate() - 1);
+  return now.toISOString().slice(0, 10);
 }
 
 function departureSQL(direction) {
@@ -318,19 +325,19 @@ SELECT
     d.platform_code AS platform,
     d.schedule_relationship,
     d.departure_delay
-FROM gtfs.departures_rt_view(date = today()) d
+FROM gtfs.departures_rt_view(date = {service_date:Date32}) d
 WHERE ${where}
   AND d.departure_time ${op} {now_time:String}
 ORDER BY d.departure_time ${order}
 LIMIT ${limit}`;
 
-  return { sql, params: { ...params, now_time: nowTimeStr() } };
+  return { sql, params: { ...params, now_time: nowTimeStr(), service_date: serviceDate() } };
 }
 
 function loadDepartures() {
   if (!state.parentStation) return;
   const statusEl = document.getElementById('status');
-  statusEl.textContent = 'Loading...';
+  statusEl.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
 
   const past = departureSQL('past');
   const next = departureSQL('next');
