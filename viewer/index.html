@@ -138,9 +138,18 @@ function highlightSuggestion(items) {
   for (let i = 0; i < items.length; i++) items[i].classList.toggle('active', i === activeIdx);
 }
 
+function sanitizeMarkOnly(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  tpl.content.querySelectorAll('*').forEach(el => {
+    if (el.tagName !== 'MARK') el.replaceWith(...el.childNodes);
+  });
+  return tpl.innerHTML;
+}
+
 function searchStations(q) {
-  const sql = `SELECT DISTINCT stop_id, stop_name FROM gtfs.stops WHERE location_type = '1' AND stop_name ILIKE {search:String} ORDER BY stop_name LIMIT 15`;
-  chQuery(sql, { search: '%' + q + '%' }).then(rows => {
+  const sql = `SELECT DISTINCT stop_id, stop_name, highlight(stop_name, splitByChar(' ', {search:String}), '<mark>', '</mark>') AS stop_name_hl FROM gtfs.stops WHERE location_type = '1' AND arrayAll(t -> stop_name ILIKE concat('%', t, '%'), splitByChar(' ', {search:String})) ORDER BY multiIf(stop_name ILIKE concat({search:String}, '%'), 1, stop_name ILIKE concat('% ', {search:String}, '%'), 2, 3), length(stop_name), stop_name LIMIT 15`;
+  chQuery(sql, { search: q }).then(rows => {
     suggestionsEl.innerHTML = '';
     activeIdx = -1;
     if (!rows.length) { hideSuggestions(); return; }
@@ -148,7 +157,7 @@ function searchStations(q) {
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'list-group-item list-group-item-action';
-      item.textContent = r.stop_name;
+      item.innerHTML = sanitizeMarkOnly(r.stop_name_hl);
       item.addEventListener('click', () => selectStation(r.stop_id, r.stop_name));
       suggestionsEl.appendChild(item);
     });
