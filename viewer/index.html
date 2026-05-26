@@ -145,7 +145,6 @@ function chQuery(sql, params = {}) {
 function buildFilters() {
   const conditions = [];
   const params = {};
-  conditions.push('d.parent_station = {parent_station:String}');
   params.parent_station = state.parentStation;
 
   const type = document.getElementById('filter-type').value;
@@ -157,7 +156,7 @@ function buildFilters() {
   const direction = document.getElementById('filter-direction').value;
   if (direction) { conditions.push('d.trip_headsign = {filter_direction:String}'); params.filter_direction = direction; }
 
-  return { where: conditions.join(' AND '), params };
+  return { where: conditions.length ? conditions.join(' AND ') + ' AND' : '', params };
 }
 
 // --- Autocomplete ---
@@ -328,9 +327,9 @@ SELECT
     d.platform_code AS platform,
     d.schedule_relationship,
     d.departure_delay
-FROM gtfs.departures_rt_view(date = {service_date:Date32}) d
+FROM gtfs.departures_rt_view(date = {service_date:Date32}, parent_station = {parent_station:String}) d
 WHERE ${where}
-  AND d.departure_time ${op} {now_time:String}
+  d.departure_time ${op} {now_time:String}
 ORDER BY d.departure_time ${order}
 LIMIT ${limit}`;
 

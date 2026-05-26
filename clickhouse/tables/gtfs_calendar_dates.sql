@@ -7,4 +7,4 @@ CREATE TABLE IF NOT EXISTS gtfs.calendar_dates
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(feed_version)
-ORDER BY (feed_version, service_id, date);
+ORDER BY (feed_version, date, exception_type, service_id);
