@@ -32,7 +32,7 @@ GTFS_TABLES = [
     ("feed_info",      "feed_info.txt"),
 ]
 
-ALL_TABLES = [t for t, _ in GTFS_TABLES] + ["departures", "calendar_by_day"]
+ALL_TABLES = [t for t, _ in GTFS_TABLES] + ["departures"]
 
 
 @dataclass
@@ -89,6 +89,11 @@ def init_schema(cfg):
 
     print("=== Creating materialized views ===")
     for sql in sorted(glob(str(cfg.ch_dir / "materialized_views" / "gtfs_*.sql"))):
+        print(f"  {Path(sql).name}")
+        run([cfg.ch_client, "--queries-file", sql], check=True)
+
+    print("=== Creating views ===")
+    for sql in sorted(glob(str(cfg.ch_dir / "views" / "gtfs_*.sql"))):
         print(f"  {Path(sql).name}")
         run([cfg.ch_client, "--queries-file", sql], check=True)
 

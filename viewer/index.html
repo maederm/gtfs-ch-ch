@@ -165,36 +165,16 @@ function departureSQL(direction) {
   const limit = direction === 'past' ? 5 : 10;
 
   const sql = `
-WITH active_services AS (
-    SELECT service_id, feed_version FROM gtfs.calendar_by_day
-    WHERE day_of_week = toDayOfWeek(today()) AND start_date <= today() AND end_date >= today()
-    UNION ALL
-    SELECT service_id, feed_version FROM gtfs.calendar_dates
-    WHERE date = today() AND exception_type = 1
-),
-removed_services AS (
-    SELECT service_id, feed_version FROM gtfs.calendar_dates
-    WHERE date = today() AND exception_type = 2
-),
-latest_rt AS (
-    SELECT max(feed_timestamp) AS ts FROM gtfs_rt.trip_updates
-)
 SELECT
     d.departure_time AS departure_time,
     d.route_short_name AS route,
     d.route_desc AS type,
     d.trip_headsign AS direction,
     d.platform_code AS platform,
-    if(tu.schedule_relationship = 'CANCELED', 'CANCELED',
-       if(stu.departure_delay > 0, concat('+', toString(round(stu.departure_delay / 60))), '')) AS delay,
-    stu.departure_delay AS delay_seconds
-FROM gtfs.departures d
-JOIN active_services a ON d.feed_version = a.feed_version AND d.service_id = a.service_id
-LEFT ANTI JOIN removed_services rm ON d.feed_version = rm.feed_version AND d.service_id = rm.service_id
-LEFT JOIN gtfs_rt.trip_updates tu ON d.feed_version = tu.feed_version AND d.trip_id = tu.trip_id AND tu.feed_timestamp = (SELECT ts FROM latest_rt)
-LEFT JOIN gtfs_rt.stop_time_updates stu ON d.feed_version = stu.feed_version AND d.trip_id = stu.trip_id AND d.stop_id = stu.stop_id AND stu.feed_timestamp = (SELECT ts FROM latest_rt)
+    d.schedule_relationship,
+    d.departure_delay
+FROM gtfs.departures_rt_view(date = today()) d
 WHERE ${where}
-  AND d.feed_version = (SELECT max(feed_version) FROM gtfs.feed_info)
   AND d.departure_time ${op} {now_time:String}
 ORDER BY d.departure_time ${order}
 LIMIT ${limit}`;
@@ -242,18 +222,27 @@ function renderTable(pastRows, nextRows) {
     return;
   }
 
+  function fmtDelay(r) {
+    if (r.schedule_relationship === 'CANCELED') return 'CANCELED';
+    const mins = Math.round(r.departure_delay / 60);
+    if (!mins) return '';
+    return (mins > 0 ? '+' : '') + mins;
+  }
+
   let html = '<table class="table table-sm table-hover mb-0"><thead class="table-dark"><tr><th>Time</th><th>Route</th><th>Type</th><th>Direction</th><th>Pl.</th><th>Delay</th></tr></thead><tbody>';
 
   pastRows.forEach(r => {
-    const cls = r.delay === 'CANCELED' ? 'past canceled' : 'past';
-    html += `<tr class="${cls}"><td>${fmtTime(r.departure_time)}</td><td>${esc(r.route)}</td><td>${esc(r.type)}</td><td>${esc(r.direction)}</td><td>${esc(r.platform || '')}</td><td class="delay text-danger">${esc(r.delay)}</td></tr>`;
+    const delay = fmtDelay(r);
+    const cls = r.schedule_relationship === 'CANCELED' ? 'past canceled' : 'past';
+    html += `<tr class="${cls}"><td>${fmtTime(r.departure_time)}</td><td>${esc(r.route)}</td><td>${esc(r.type)}</td><td>${esc(r.direction)}</td><td>${esc(r.platform || '')}</td><td class="delay text-danger">${esc(delay)}</td></tr>`;
   });
 
   html += '<tr class="now-marker table-primary"><td colspan="6">now</td></tr>';
 
   nextRows.forEach(r => {
-    const cls = r.delay === 'CANCELED' ? 'canceled' : '';
-    html += `<tr class="${cls}"><td>${fmtTime(r.departure_time)}</td><td>${esc(r.route)}</td><td>${esc(r.type)}</td><td>${esc(r.direction)}</td><td>${esc(r.platform || '')}</td><td class="delay text-danger">${esc(r.delay)}</td></tr>`;
+    const delay = fmtDelay(r);
+    const cls = r.schedule_relationship === 'CANCELED' ? 'canceled' : '';
+    html += `<tr class="${cls}"><td>${fmtTime(r.departure_time)}</td><td>${esc(r.route)}</td><td>${esc(r.type)}</td><td>${esc(r.direction)}</td><td>${esc(r.platform || '')}</td><td class="delay text-danger">${esc(delay)}</td></tr>`;
   });
 
   html += '</tbody></table>';

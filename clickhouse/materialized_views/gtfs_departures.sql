@@ -1,17 +1,20 @@
 CREATE TABLE IF NOT EXISTS gtfs.departures
 (
-    feed_version Date32,
-    trip_id        String,
-    departure_time String,
-    arrival_time   String,
-    service_id     String,
+    feed_version     Date32,
+    trip_id          String,
+    departure_time   String,
+    arrival_time     String,
+    service_id       String,
     route_short_name String,
-    route_desc     String,
-    trip_headsign  String,
-    stop_id        String,
-    stop_name      String,
-    parent_station String DEFAULT '',
-    platform_code  Nullable(String)
+    route_desc       String,
+    trip_headsign    String,
+    stop_id          String,
+    stop_name        String,
+    parent_station   String DEFAULT '',
+    platform_code    Nullable(String),
+    active_days      UInt8,
+    start_date       Date32,
+    end_date         Date32
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(feed_version)
@@ -32,8 +35,12 @@ SELECT
     st.stop_id AS stop_id,
     s.stop_name AS stop_name,
     s.parent_station AS parent_station,
-    s.platform_code AS platform_code
+    s.platform_code AS platform_code,
+    toUInt8(c.monday + c.tuesday*2 + c.wednesday*4 + c.thursday*8 + c.friday*16 + c.saturday*32 + c.sunday*64) AS active_days,
+    c.start_date AS start_date,
+    c.end_date AS end_date
 FROM gtfs.stop_times st
 JOIN gtfs.trips t ON st.feed_version = t.feed_version AND st.trip_id = t.trip_id
 JOIN gtfs.routes r ON t.feed_version = r.feed_version AND t.route_id = r.route_id
-JOIN gtfs.stops s ON st.feed_version = s.feed_version AND st.stop_id = s.stop_id;
+JOIN gtfs.stops s ON st.feed_version = s.feed_version AND st.stop_id = s.stop_id
+LEFT JOIN gtfs.calendar c ON st.feed_version = c.feed_version AND t.service_id = c.service_id;
