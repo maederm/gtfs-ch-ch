@@ -4,9 +4,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CH_DIR="$PROJECT_DIR/clickhouse"
-DATA_DIR="$PROJECT_DIR/data/gtfs_fp2026_20260520"
+
+# Override precedence: first CLI argument, then DATA_DIR env var, then default path.
+DEFAULT_DATA_DIR="$PROJECT_DIR/data/gtfs_fp2026_20260520"
+DATA_DIR="${1:-${DATA_DIR:-$DEFAULT_DATA_DIR}}"
 
 CH_CLIENT="${CH_CLIENT:-clickhouse-client}"
+
+if [ ! -d "$DATA_DIR" ]; then
+    echo "Error: DATA_DIR does not exist: $DATA_DIR" >&2
+    echo "Usage: DATA_DIR=/path/to/gtfs_folder $0" >&2
+    echo "   or: $0 /path/to/gtfs_folder" >&2
+    exit 1
+fi
 
 FEED_VERSION=$(awk -F',' 'NR==2 { gsub(/"/, "", $6); print $6 }' "$DATA_DIR/feed_info.txt" | tr -d '\r')
 echo "=== Feed version: $FEED_VERSION ==="
