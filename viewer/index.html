@@ -253,8 +253,14 @@ function loadFilterOptions() {
   const direction = document.getElementById('filter-direction').value;
   if (direction) { conditions.push('trip_headsign = {fd:String}'); params.fd = direction; }
 
-  const sql = `SELECT DISTINCT route_desc, route_short_name, trip_headsign FROM gtfs.departures WHERE ${conditions.join(' AND ')} ORDER BY route_desc, route_short_name, trip_headsign`;
+  const sql = `
+    SELECT
+      arraySort(groupUniqArray(route_desc)) AS types,
+      arraySort(x -> naturalSortKey(x), groupUniqArray(route_short_name)) AS routes,
+      arraySort(groupUniqArray(trip_headsign)) AS directions
+    FROM gtfs.departures WHERE ${conditions.join(' AND ')}`;
   return chQuery(sql, params).then(rows => {
+    const row = rows[0] || { types: [], routes: [], directions: [] };
     const typeEl = document.getElementById('filter-type');
     const routeEl = document.getElementById('filter-route');
     const dirEl = document.getElementById('filter-direction');
@@ -266,24 +272,21 @@ function loadFilterOptions() {
     routeEl.innerHTML = '<option value="">All routes</option>';
     dirEl.innerHTML = '<option value="">All directions</option>';
 
-    const types = [...new Set(rows.map(r => r.route_desc))];
-    types.forEach(t => {
+    row.types.forEach(t => {
       const opt = document.createElement('option');
       opt.value = t;
       opt.textContent = t;
       typeEl.appendChild(opt);
     });
 
-    const routes = [...new Set(rows.map(r => r.route_short_name))];
-    routes.forEach(r => {
+    row.routes.forEach(r => {
       const opt = document.createElement('option');
       opt.value = r;
       opt.textContent = r;
       routeEl.appendChild(opt);
     });
 
-    const directions = [...new Set(rows.map(r => r.trip_headsign))];
-    directions.forEach(d => {
+    row.directions.forEach(d => {
       const opt = document.createElement('option');
       opt.value = d;
       opt.textContent = d;
