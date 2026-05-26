@@ -34,6 +34,10 @@
   <div id="results"></div>
 </div>
 
+<template id="error-message">
+  <div class="text-center text-muted py-4"></div>
+</template>
+
 <template id="departure-row">
   <tr>
     <td class="dep-time"></td>
@@ -230,7 +234,11 @@ function loadDepartures() {
     document.getElementById('feed-info').textContent =
       `Feed: ${meta.feed_version || '?'} | RT: ${rtText}`;
   }).catch(err => {
-    document.getElementById('results').innerHTML = `<div class="text-center text-muted py-4">Error: ${err.message}</div>`;
+    const tpl = document.getElementById('error-message').content.cloneNode(true);
+    tpl.querySelector('div').textContent = 'Error: ' + err.message;
+    const el = document.getElementById('results');
+    el.innerHTML = '';
+    el.appendChild(tpl);
     statusEl.textContent = '';
   });
 }
@@ -238,7 +246,10 @@ function loadDepartures() {
 function renderTable(pastRows, nextRows) {
   const el = document.getElementById('results');
   if (!pastRows.length && !nextRows.length) {
-    el.innerHTML = '<div class="text-center text-muted py-4">No departures found</div>';
+    const tpl = document.getElementById('error-message').content.cloneNode(true);
+    tpl.querySelector('div').textContent = 'No departures found';
+    el.innerHTML = '';
+    el.appendChild(tpl);
     return;
   }
 
