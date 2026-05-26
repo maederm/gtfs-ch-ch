@@ -38,6 +38,10 @@
   <div class="text-center text-muted py-4"></div>
 </template>
 
+<template id="search-error">
+  <div class="list-group-item list-group-item-danger small"></div>
+</template>
+
 <template id="departure-row">
   <tr>
     <td class="dep-time"></td>
@@ -162,7 +166,13 @@ function searchStations(q) {
       suggestionsEl.appendChild(item);
     });
     suggestionsEl.style.display = 'block';
-  }).catch(() => hideSuggestions());
+  }).catch(err => {
+    suggestionsEl.innerHTML = '';
+    const tpl = document.getElementById('search-error').content.cloneNode(true);
+    tpl.querySelector('div').textContent = 'Search error: ' + err.message;
+    suggestionsEl.appendChild(tpl);
+    suggestionsEl.style.display = 'block';
+  });
 }
 
 function hideSuggestions() {
