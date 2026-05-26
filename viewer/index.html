@@ -34,6 +34,26 @@
   <div id="results"></div>
 </div>
 
+<template id="departure-row">
+  <tr>
+    <td class="dep-time"></td>
+    <td class="dep-route"></td>
+    <td class="dep-type"></td>
+    <td class="dep-direction"></td>
+    <td class="dep-platform"></td>
+    <td class="dep-delay delay text-danger"></td>
+  </tr>
+</template>
+
+<template id="departures-table">
+  <table class="table table-sm table-hover mb-0">
+    <thead class="table-dark">
+      <tr><th>Time</th><th>Route</th><th>Type</th><th>Direction</th><th>Pl.</th><th>Delay</th></tr>
+    </thead>
+    <tbody id="departures-body"></tbody>
+  </table>
+</template>
+
 <script>
 const CH_URL = 'http://localhost:8123/';
 
@@ -222,6 +242,10 @@ function renderTable(pastRows, nextRows) {
     return;
   }
 
+  const table = document.getElementById('departures-table').content.cloneNode(true);
+  const tbody = table.querySelector('tbody');
+  const rowTpl = document.getElementById('departure-row').content;
+
   function fmtDelay(r) {
     if (r.schedule_relationship === 'CANCELED') return 'CANCELED';
     const mins = Math.round(r.departure_delay / 60);
@@ -229,24 +253,34 @@ function renderTable(pastRows, nextRows) {
     return (mins > 0 ? '+' : '') + mins;
   }
 
-  let html = '<table class="table table-sm table-hover mb-0"><thead class="table-dark"><tr><th>Time</th><th>Route</th><th>Type</th><th>Direction</th><th>Pl.</th><th>Delay</th></tr></thead><tbody>';
+  function addRow(r, cls) {
+    const row = rowTpl.cloneNode(true);
+    const tr = row.querySelector('tr');
+    tr.className = cls;
+    tr.querySelector('.dep-time').textContent = fmtTime(r.departure_time);
+    tr.querySelector('.dep-route').textContent = r.route || '';
+    tr.querySelector('.dep-type').textContent = r.type || '';
+    tr.querySelector('.dep-direction').textContent = r.direction || '';
+    tr.querySelector('.dep-platform').textContent = r.platform || '';
+    tr.querySelector('.dep-delay').textContent = fmtDelay(r);
+    tbody.appendChild(row);
+  }
 
   pastRows.forEach(r => {
-    const delay = fmtDelay(r);
-    const cls = r.schedule_relationship === 'CANCELED' ? 'past canceled' : 'past';
-    html += `<tr class="${cls}"><td>${fmtTime(r.departure_time)}</td><td>${esc(r.route)}</td><td>${esc(r.type)}</td><td>${esc(r.direction)}</td><td>${esc(r.platform || '')}</td><td class="delay text-danger">${esc(delay)}</td></tr>`;
+    addRow(r, r.schedule_relationship === 'CANCELED' ? 'past canceled' : 'past');
   });
 
-  html += '<tr class="now-marker table-primary"><td colspan="6">now</td></tr>';
+  const marker = document.createElement('tr');
+  marker.className = 'now-marker table-primary';
+  marker.innerHTML = '<td colspan="6">now</td>';
+  tbody.appendChild(marker);
 
   nextRows.forEach(r => {
-    const delay = fmtDelay(r);
-    const cls = r.schedule_relationship === 'CANCELED' ? 'canceled' : '';
-    html += `<tr class="${cls}"><td>${fmtTime(r.departure_time)}</td><td>${esc(r.route)}</td><td>${esc(r.type)}</td><td>${esc(r.direction)}</td><td>${esc(r.platform || '')}</td><td class="delay text-danger">${esc(delay)}</td></tr>`;
+    addRow(r, r.schedule_relationship === 'CANCELED' ? 'canceled' : '');
   });
 
-  html += '</tbody></table>';
-  el.innerHTML = html;
+  el.innerHTML = '';
+  el.appendChild(table);
 }
 
 function fmtTime(t) {
