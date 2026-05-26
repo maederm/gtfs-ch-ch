@@ -423,7 +423,9 @@ function renderTable(pastRows, nextRows) {
 }
 
 function fmtTime(t) {
-  return t ? t.substring(0, 5) : '';
+  if (!t) return '';
+  const [h, m] = t.split(':');
+  return String(parseInt(h) % 24).padStart(2, '0') + ':' + m;
 }
 
 function esc(s) {
