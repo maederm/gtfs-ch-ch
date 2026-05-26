@@ -194,6 +194,7 @@ LEFT ANTI JOIN removed_services rm ON d.feed_version = rm.feed_version AND d.ser
 LEFT JOIN gtfs_rt.trip_updates tu ON d.feed_version = tu.feed_version AND d.trip_id = tu.trip_id AND tu.feed_timestamp = (SELECT ts FROM latest_rt)
 LEFT JOIN gtfs_rt.stop_time_updates stu ON d.feed_version = stu.feed_version AND d.trip_id = stu.trip_id AND d.stop_id = stu.stop_id AND stu.feed_timestamp = (SELECT ts FROM latest_rt)
 WHERE ${where}
+  AND d.feed_version = (SELECT max(feed_version) FROM gtfs.feed_info)
   AND d.departure_time ${op} {now_time:String}
 ORDER BY d.departure_time ${order}
 LIMIT ${limit}`;
@@ -214,7 +215,8 @@ function loadDepartures() {
     chQuery(next.sql, next.params),
     chQuery(`SELECT
       toString(max(feed_version)) AS feed_version,
-      toString((SELECT max(feed_timestamp) FROM gtfs_rt.trip_updates)) AS feed_timestamp
+      toString((SELECT max(feed_timestamp) FROM gtfs_rt.trip_updates)) AS feed_timestamp,
+      toString((SELECT feed_version FROM gtfs_rt.trip_updates ORDER BY feed_timestamp DESC LIMIT 1)) AS rt_feed_version
     FROM gtfs.departures`),
   ]).then(([pastRows, nextRows, metaRows]) => {
     pastRows.reverse();
@@ -222,8 +224,11 @@ function loadDepartures() {
     statusEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
     document.getElementById('refresh-btn').classList.remove('d-none');
     const meta = metaRows[0] || {};
+    const rtText = meta.rt_feed_version === meta.feed_version
+      ? meta.feed_timestamp
+      : 'no matching real-time data';
     document.getElementById('feed-info').textContent =
-      `Feed: ${meta.feed_version || '?'} | RT: ${meta.feed_timestamp || '?'}`;
+      `Feed: ${meta.feed_version || '?'} | RT: ${rtText}`;
   }).catch(err => {
     document.getElementById('results').innerHTML = `<div class="text-center text-muted py-4">Error: ${err.message}</div>`;
     statusEl.textContent = '';
