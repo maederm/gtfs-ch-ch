@@ -11,4 +11,4 @@ CREATE TABLE IF NOT EXISTS gtfs_rt.trip_updates
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(feed_timestamp)
-ORDER BY (trip_id, feed_timestamp);
+ORDER BY (feed_timestamp, trip_id);
