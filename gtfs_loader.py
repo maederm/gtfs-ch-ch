@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from glob import glob
 from os import environ
 from pathlib import Path
-from re import search, IGNORECASE
+from re import IGNORECASE, search
 from shutil import copyfileobj
 from subprocess import run
 from tempfile import TemporaryDirectory
@@ -20,16 +20,16 @@ from requests import get as http_get
 CKAN_URL = "https://ckan.opendata.swiss/api/3/action/package_show?id=fahrplan-2026-gtfs2020"
 
 GTFS_TABLES = [
-    ("agency",         "agency.txt"),
-    ("routes",         "routes.txt"),
-    ("stops",          "stops.txt"),
-    ("trips",          "trips.txt"),
-    ("calendar",       "calendar.txt"),
+    ("agency", "agency.txt"),
+    ("routes", "routes.txt"),
+    ("stops", "stops.txt"),
+    ("trips", "trips.txt"),
+    ("calendar", "calendar.txt"),
     ("calendar_dates", "calendar_dates.txt"),
-    ("frequencies",    "frequencies.txt"),
-    ("transfers",      "transfers.txt"),
-    ("stop_times",     "stop_times.txt"),
-    ("feed_info",      "feed_info.txt"),
+    ("frequencies", "frequencies.txt"),
+    ("transfers", "transfers.txt"),
+    ("stop_times", "stop_times.txt"),
+    ("feed_info", "feed_info.txt"),
 ]
 
 ALL_TABLES = [t for t, _ in GTFS_TABLES] + ["departures"]
@@ -61,8 +61,13 @@ def extract_feed_version(filename):
 
 def is_version_loaded(cfg, feed_version):
     result = run(
-        [cfg.ch_client, "-q", f"SELECT count() FROM gtfs.feed_info WHERE feed_version = toDate32('{feed_version}')"],
-        capture_output=True, text=True,
+        [
+            cfg.ch_client,
+            "-q",
+            f"SELECT count() FROM gtfs.feed_info WHERE feed_version = toDate32('{feed_version}')",
+        ],
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         return False
@@ -101,7 +106,14 @@ def init_schema(cfg):
 def delete_feed_version(cfg, feed_version):
     print(f"\n=== Deleting existing feed_version {feed_version} ===")
     for table in ALL_TABLES:
-        run([cfg.ch_client, "-q", f"DELETE FROM gtfs.{table} WHERE feed_version = toDate32('{feed_version}')"], check=True)
+        run(
+            [
+                cfg.ch_client,
+                "-q",
+                f"DELETE FROM gtfs.{table} WHERE feed_version = toDate32('{feed_version}')",
+            ],
+            check=True,
+        )
         print(f"  gtfs.{table}")
 
 
@@ -109,7 +121,9 @@ def load_table(cfg, zip_path, table, csv_file, feed_version):
     if csv_file == "feed_info.txt":
         select = f"SELECT toDate32(feed_version) AS feed_version, * EXCEPT (feed_version) FROM file('{zip_path} :: {csv_file}', CSVWithNames)"
     else:
-        select = f"SELECT toDate32('{feed_version}') AS feed_version, * FROM file('{zip_path} :: {csv_file}', CSVWithNames)"
+        select = (
+            f"SELECT toDate32('{feed_version}') AS feed_version, * FROM file('{zip_path} :: {csv_file}', CSVWithNames)"
+        )
 
     query = f"""
         INSERT INTO FUNCTION remote('{cfg.ch_host}:{cfg.ch_port}', 'gtfs', '{table}')
@@ -124,7 +138,8 @@ def print_row_counts(cfg):
     for table in ALL_TABLES:
         result = run(
             [cfg.ch_client, "-q", f"SELECT count() FROM gtfs.{table}"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         count = result.stdout.strip() if result.returncode == 0 else "error"
         print(f"  gtfs.{table:20s} {count}")
@@ -132,7 +147,11 @@ def print_row_counts(cfg):
 
 def main():
     parser = ArgumentParser(description="Auto-load GTFS base data into ClickHouse")
-    parser.add_argument("--init", action="store_true", help="Create database, tables, and materialized views, then exit")
+    parser.add_argument(
+        "--init",
+        action="store_true",
+        help="Create database, tables, and materialized views, then exit",
+    )
     parser.add_argument("--force", action="store_true", help="Load even if feed version already exists")
     args = parser.parse_args()
 

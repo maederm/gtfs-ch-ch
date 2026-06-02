@@ -1,0 +1,12 @@
+[project]
+name = "gtfs-sbb-ch"
+version = "0.1.0"
+description = "Parse GTFS feed with mostly ClickHouse. But sometimes we still use python."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.34.2",
+]
+
+[tool.ruff]
+line-length = 120

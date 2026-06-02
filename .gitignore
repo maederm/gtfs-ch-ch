@@ -1,4 +1,5 @@
 data/*
 .env
 .agents/
-.claude/*
+.claude/
+.python-version
