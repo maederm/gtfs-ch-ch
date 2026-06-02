@@ -50,7 +50,6 @@ curl -o ./.clickhouse/servers/default/data/format_schemas/gtfs-realtime.proto ht
 - [GTFS Cookbook](https://opentransportdata.swiss/en/cookbook/realtime-prediction-cookbook/gtfs-rt/)
 - [GTFS-RT Cookbook](https://opentransportdata.swiss/en/cookbook/timetable-cookbook/gtfs/)
 
-
 ##  License
 
 Unless otherwise noted, the contents of this repository are licensed under the GNU Affero General Public License, version 3 or any later version. See [`LICENSE`](LICENSE).
