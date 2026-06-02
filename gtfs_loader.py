@@ -35,6 +35,10 @@ GTFS_TABLES = [
 ALL_TABLES = [t for t, _ in GTFS_TABLES] + ["departures"]
 
 
+def with_ch_params(cmd, params):
+    return cmd + [f"--param_{key}={value}" for key, value in params.items()]
+
+
 @dataclass
 class Config:
     ch_client: str = field(default_factory=lambda: environ.get("CH_CLIENT", "clickhouse-client"))
@@ -60,12 +64,10 @@ def extract_feed_version(filename):
 
 
 def is_version_loaded(cfg, feed_version):
+    query = "SELECT count() FROM {db:Identifier}.{table:Identifier} WHERE feed_version = {feed_version:Date32}"
+    params = {"db": "gtfs", "table": "feed_info", "feed_version": feed_version}
     result = run(
-        [
-            cfg.ch_client,
-            "-q",
-            f"SELECT count() FROM gtfs.feed_info WHERE feed_version = toDate32('{feed_version}')",
-        ],
+        with_ch_params([cfg.ch_client, "-q", query], params),
         capture_output=True,
         text=True,
     )
@@ -105,39 +107,49 @@ def init_schema(cfg):
 
 def delete_feed_version(cfg, feed_version):
     print(f"\n=== Deleting existing feed_version {feed_version} ===")
-    for table in ALL_TABLES:
+    query = "DELETE FROM {db:Identifier}.{table:Identifier} WHERE feed_version = {feed_version:Date32}"
+    for table in sorted(ALL_TABLES, key=lambda t: t == "feed_info"):  # delete feed_info last
+        params = {"db": "gtfs", "table": table, "feed_version": feed_version}
         run(
-            [
-                cfg.ch_client,
-                "-q",
-                f"DELETE FROM gtfs.{table} WHERE feed_version = toDate32('{feed_version}')",
-            ],
+            with_ch_params([cfg.ch_client, "-q", query], params),
             check=True,
         )
         print(f"  gtfs.{table}")
 
 
 def load_table(cfg, zip_path, table, csv_file, feed_version):
+    file_arg = f"{zip_path} :: {csv_file}"
     if csv_file == "feed_info.txt":
-        select = f"SELECT toDate32(feed_version) AS feed_version, * EXCEPT (feed_version) FROM file('{zip_path} :: {csv_file}', CSVWithNames)"
-    else:
         select = (
-            f"SELECT toDate32('{feed_version}') AS feed_version, * FROM file('{zip_path} :: {csv_file}', CSVWithNames)"
+            "SELECT toDate32(feed_version) AS feed_version, * EXCEPT (feed_version) "
+            "FROM file({file_arg:String}, CSVWithNames)"
         )
+        select_params = {"file_arg": file_arg}
+    else:
+        select = "SELECT toDate32({feed_version:Date32}) AS feed_version, * FROM file({file_arg:String}, CSVWithNames)"
+        select_params = {"feed_version": feed_version, "file_arg": file_arg}
 
-    query = f"""
-        INSERT INTO FUNCTION remote('{cfg.ch_host}:{cfg.ch_port}', 'gtfs', '{table}')
-        {select}
-        SETTINGS date_time_input_format='best_effort', input_format_csv_empty_as_default=1
-    """
-    run([cfg.ch_local, "-q", query], check=True)
+    query = (
+        "INSERT INTO FUNCTION remote({remote:String}, {db:String}, {table:String}) "
+        + select
+        + " SETTINGS date_time_input_format='best_effort', input_format_csv_empty_as_default=1"
+    )
+    params = {
+        "remote": f"{cfg.ch_host}:{cfg.ch_port}",
+        "db": "gtfs",
+        "table": table,
+        **select_params,
+    }
+    run(with_ch_params([cfg.ch_local, "-q", query], params), check=True)
 
 
 def print_row_counts(cfg):
     print("\n=== Row counts ===")
+    query = "SELECT count() FROM {db:Identifier}.{table:Identifier}"
     for table in ALL_TABLES:
+        params = {"db": "gtfs", "table": table}
         result = run(
-            [cfg.ch_client, "-q", f"SELECT count() FROM gtfs.{table}"],
+            with_ch_params([cfg.ch_client, "-q", query], params),
             capture_output=True,
             text=True,
         )
