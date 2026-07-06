@@ -157,18 +157,24 @@ def populate_departures(cfg, feed_version):
     )
 
 
-def print_row_counts(cfg):
+def print_row_counts(cfg, feed_version):
     print("\n=== Row counts ===")
-    query = "SELECT count() FROM {db:Identifier}.{table:Identifier}"
+    query = (
+        "SELECT count() AS total, countIf(feed_version = {feed_version:Date32}) AS added "
+        "FROM {db:Identifier}.{table:Identifier}"
+    )
     for table in ALL_TABLES:
-        params = {"db": "gtfs", "table": table}
+        params = {"db": "gtfs", "table": table, "feed_version": feed_version}
         result = run(
             with_ch_params([cfg.ch_client, "-q", query], params),
             capture_output=True,
             text=True,
         )
-        count = result.stdout.strip() if result.returncode == 0 else "error"
-        print(f"  gtfs.{table:20s} {count}")
+        if result.returncode == 0:
+            total, added = result.stdout.strip().split("\t")
+            print(f"  gtfs.{table:20s} {total:>12s} (+{added:>12s})")
+        else:
+            print(f"  gtfs.{table:20s}        error")
 
 
 def main():
@@ -223,7 +229,7 @@ def main():
 
         populate_departures(cfg, feed_version)
 
-        print_row_counts(cfg)
+        print_row_counts(cfg, feed_version)
 
     print("\nDone.")
 
