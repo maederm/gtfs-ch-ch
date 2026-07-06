@@ -32,6 +32,10 @@
   </div>
 
   <div class="d-flex align-items-center gap-2 mb-2">
+    <div class="form-check form-switch mb-0">
+      <input class="form-check-input" type="checkbox" id="time-toggle">
+      <label class="form-check-label small" for="time-toggle">Relative time</label>
+    </div>
     <select id="filter-type" class="form-select form-select-sm" style="width: auto">
       <option value="">All types</option>
     </select>
@@ -62,6 +66,7 @@
 <template id="departure-row">
   <tr>
     <td class="dep-time"></td>
+    <td class="dep-expected"></td>
     <td class="dep-route"></td>
     <td class="dep-type"></td>
     <td class="dep-direction"></td>
@@ -73,7 +78,7 @@
 <template id="departures-table">
   <table class="table table-sm table-hover mb-0">
     <thead class="table-dark">
-      <tr><th>Time</th><th>Route</th><th>Type</th><th>Direction</th><th>Pl.</th><th>Delay</th></tr>
+      <tr><th>Scheduled</th><th>Estimated</th><th>Route</th><th>Type</th><th>Direction</th><th>Pl.</th><th>Delay</th></tr>
     </thead>
     <tbody id="departures-body"></tbody>
   </table>
@@ -86,6 +91,7 @@ const ACTIVE_FEED = `least((SELECT max(feed_version) FROM gtfs.feed_info), (SELE
 const state = {
   parentStation: '',
   stationName: '',
+  relativeTime: false,
 };
 
 // --- URL hash persistence ---
@@ -100,6 +106,7 @@ function saveHash() {
     if (type) params.set('type', type);
     if (route) params.set('route', route);
     if (direction) params.set('direction', direction);
+    if (state.relativeTime) params.set('rel', '1');
     location.hash = encodeURIComponent(state.stationName) + '?' + params.toString();
   }
 }
@@ -121,6 +128,9 @@ function loadHash() {
     direction: params.get('direction') || '',
   };
 
+  state.relativeTime = params.get('rel') === '1';
+  document.getElementById('time-toggle').checked = state.relativeTime;
+
   loadFilterOptions().then(() => {
     if (pending.type) document.getElementById('filter-type').value = pending.type;
     if (pending.route) document.getElementById('filter-route').value = pending.route;
@@ -137,6 +147,7 @@ function chQuery(sql, params = {}) {
   const url = new URL(CH_URL);
   url.searchParams.set('add_http_cors_header', '1');
   url.searchParams.set('default_format', 'JSON');
+  url.searchParams.set('date_time_output_format', 'iso');
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set('param_' + k, v);
   }
@@ -325,13 +336,14 @@ function departureSQL(direction) {
 
   const sql = `
 SELECT
-    d.departure_time AS departure_time,
+    d.scheduled_departure_time AS scheduled,
     d.route_short_name AS route,
     d.route_desc AS type,
     d.trip_headsign AS direction,
     d.platform_code AS platform,
     d.schedule_relationship,
-    d.departure_delay
+    d.departure_delay,
+    d.expected_departure_time AS expected
 FROM gtfs.departures_rt_view(date = {service_date:Date32}, parent_station = {parent_station:String}) d
 WHERE ${where}
   d.departure_time ${op} {now_time:String}
@@ -398,7 +410,10 @@ function renderTable(pastRows, nextRows) {
     const row = rowTpl.cloneNode(true);
     const tr = row.querySelector('tr');
     tr.className = cls;
-    tr.querySelector('.dep-time').textContent = fmtTime(r.departure_time);
+    const scheduled = r.scheduled ? new Date(r.scheduled) : null;
+    const expected = r.expected ? new Date(r.expected) : null;
+    tr.querySelector('.dep-time').textContent = state.relativeTime ? fmtRelative(scheduled) : fmtDateTime(scheduled);
+    tr.querySelector('.dep-expected').textContent = state.relativeTime ? fmtRelative(expected) : fmtDateTime(expected);
     tr.querySelector('.dep-route').textContent = r.route || '';
     tr.querySelector('.dep-type').textContent = r.type || '';
     tr.querySelector('.dep-direction').textContent = r.direction || '';
@@ -413,7 +428,7 @@ function renderTable(pastRows, nextRows) {
 
   const marker = document.createElement('tr');
   marker.className = 'now-marker table-primary';
-  marker.innerHTML = '<td colspan="6">now</td>';
+  marker.innerHTML = '<td colspan="7">now</td>';
   tbody.appendChild(marker);
 
   nextRows.forEach(r => {
@@ -424,10 +439,16 @@ function renderTable(pastRows, nextRows) {
   el.appendChild(table);
 }
 
-function fmtTime(t) {
-  if (!t) return '';
-  const [h, m] = t.split(':');
-  return String(parseInt(h) % 24).padStart(2, '0') + ':' + m;
+function fmtDateTime(d) {
+  if (!d) return '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtRelative(d) {
+  if (!d) return '';
+  const diff = Math.round((d.getTime() - Date.now()) / 60000);
+  if (diff <= 0) return 'now';
+  return diff + ' min';
 }
 
 function esc(s) {
@@ -457,6 +478,11 @@ document.addEventListener('visibilitychange', () => {
 });
 
 document.getElementById('refresh-btn').addEventListener('click', loadDepartures);
+document.getElementById('time-toggle').addEventListener('change', (e) => {
+  state.relativeTime = e.target.checked;
+  saveHash();
+  loadDepartures();
+});
 document.getElementById('filter-type').addEventListener('change', () => { saveHash(); loadFilterOptions(); loadDepartures(); });
 document.getElementById('filter-route').addEventListener('change', () => { saveHash(); loadFilterOptions(); loadDepartures(); });
 document.getElementById('filter-direction').addEventListener('change', () => { saveHash(); loadFilterOptions(); loadDepartures(); });

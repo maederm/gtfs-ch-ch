@@ -1,4 +1,4 @@
-CREATE VIEW IF NOT EXISTS gtfs.departures_rt_view AS
+CREATE OR REPLACE VIEW gtfs.departures_rt_view AS
 WITH active_feed AS (
     SELECT least(
         (SELECT max(feed_version) FROM gtfs.feed_info),
@@ -11,12 +11,17 @@ latest_rt AS (
 )
 SELECT
     d.departure_time AS departure_time,
+    {date:Date32} + toTime(d.departure_time) AS scheduled_departure_time,
     d.route_short_name AS route_short_name,
     d.route_desc AS route_desc,
     d.trip_headsign AS trip_headsign,
     d.platform_code AS platform_code,
     tu.schedule_relationship AS schedule_relationship,
-    stu.departure_delay AS departure_delay
+    stu.departure_delay AS departure_delay,
+    addSeconds(
+        {date:Date32} + toTime(d.departure_time),
+        ifNull(stu.departure_delay, 0)
+    ) AS expected_departure_time
 FROM (
     SELECT feed_version, trip_id, stop_id, departure_time,
            route_short_name, route_desc, trip_headsign, platform_code, service_id
