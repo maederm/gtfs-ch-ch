@@ -165,6 +165,7 @@ def main():
         help="Create database, tables, and materialized views, then exit",
     )
     parser.add_argument("--force", action="store_true", help="Load even if feed version already exists")
+    parser.add_argument("--url", help="Download GTFS ZIP from this URL instead of fetching the latest from CKAN")
     args = parser.parse_args()
 
     cfg = Config()
@@ -174,19 +175,26 @@ def main():
         print("\nDone.")
         return
 
-    print("=== Checking for new GTFS version ===")
-    resource = get_latest_resource()
-    filename = resource["display_name"]["en"]
-    feed_version = extract_feed_version(filename)
-    download_url = resource["download_url"]
-    print(f"  Latest: {filename} (feed_version: {feed_version})")
+    if args.url:
+        print("=== Using provided URL ===")
+        download_url = args.url
+        filename = Path(download_url).name
+        feed_version = extract_feed_version(filename)
+        print(f"  {filename} (feed_version: {feed_version})")
+    else:
+        print("=== Checking for new GTFS version ===")
+        resource = get_latest_resource()
+        filename = resource["display_name"]["en"]
+        feed_version = extract_feed_version(filename)
+        download_url = resource["download_url"]
+        print(f"  Latest: {filename} (feed_version: {feed_version})")
 
     if not args.force and is_version_loaded(cfg, feed_version):
         print(f"  Feed version {feed_version} already loaded. Use --force to reload.")
         return
 
-    if args.force and is_version_loaded(cfg, feed_version):
-        delete_feed_version(cfg, feed_version)
+    # Always delete this version first, in case it was partially loaded before
+    delete_feed_version(cfg, feed_version)
 
     with TemporaryDirectory(prefix="gtfs_") as tmpdir:
         zip_path = Path(tmpdir) / filename
