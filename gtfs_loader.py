@@ -143,6 +143,18 @@ def load_table(cfg, zip_path, table, csv_file, feed_version):
     run(with_ch_params([cfg.ch_local, "-q", query], params), check=True)
 
 
+def populate_departures(cfg, feed_version):
+    print("\n=== Populating departures ===")
+    params = {"feed_version": feed_version}
+    run(
+        with_ch_params(
+            [cfg.ch_client, "--queries-file", str(cfg.ch_dir / "queries" / "gtfs_populate_departures.sql")],
+            params,
+        ),
+        check=True,
+    )
+
+
 def print_row_counts(cfg):
     print("\n=== Row counts ===")
     query = "SELECT count() FROM {db:Identifier}.{table:Identifier}"
@@ -206,6 +218,8 @@ def main():
         for table, csv_file in GTFS_TABLES:
             print(f"  {table:20s} <- {csv_file}")
             load_table(cfg, zip_path, table, csv_file, feed_version)
+
+        populate_departures(cfg, feed_version)
 
         print_row_counts(cfg)
 

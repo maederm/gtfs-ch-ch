@@ -1,28 +1,4 @@
-CREATE TABLE IF NOT EXISTS gtfs.departures
-(
-    feed_version     Date32,
-    trip_id          String,
-    departure_time   String,
-    arrival_time     String,
-    service_id       String,
-    route_short_name String,
-    route_desc       String,
-    trip_headsign    String,
-    stop_id          String,
-    stop_name        String,
-    parent_station   String DEFAULT '',
-    platform_code    Nullable(String),
-    active_days      UInt8,
-    start_date       Date32,
-    end_date         Date32
-)
-ENGINE = MergeTree()
-PARTITION BY toYYYYMM(feed_version)
-ORDER BY (feed_version, parent_station, departure_time);
-
-CREATE MATERIALIZED VIEW IF NOT EXISTS gtfs.departures_mv
-TO gtfs.departures
-AS
+INSERT INTO gtfs.departures
 SELECT
     st.feed_version AS feed_version,
     st.trip_id AS trip_id,
@@ -43,4 +19,5 @@ FROM gtfs.stop_times st
 JOIN gtfs.trips t ON st.feed_version = t.feed_version AND st.trip_id = t.trip_id
 JOIN gtfs.routes r ON t.feed_version = r.feed_version AND t.route_id = r.route_id
 JOIN gtfs.stops s ON st.feed_version = s.feed_version AND st.stop_id = s.stop_id
-LEFT JOIN gtfs.calendar c ON st.feed_version = c.feed_version AND t.service_id = c.service_id;
+LEFT JOIN gtfs.calendar c ON st.feed_version = c.feed_version AND t.service_id = c.service_id
+WHERE st.feed_version = {feed_version:Date32};
