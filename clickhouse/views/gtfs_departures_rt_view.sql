@@ -13,6 +13,7 @@ SELECT
     d.departure_time AS departure_time,
     {date:Date32} + toTime(d.departure_time) AS scheduled_departure_time,
     d.route_short_name AS route_short_name,
+    d.route_type AS route_type,
     d.route_desc AS route_desc,
     d.trip_headsign AS trip_headsign,
     d.platform_code AS platform_code,
@@ -24,7 +25,7 @@ SELECT
     ) AS expected_departure_time
 FROM (
     SELECT feed_version, trip_id, stop_id, departure_time,
-           route_short_name, route_desc, trip_headsign, platform_code, service_id
+           route_short_name, route_type, route_desc, trip_headsign, platform_code, service_id
     FROM gtfs.departures
     WHERE parent_station = {parent_station:String}
       AND feed_version = (SELECT feed_version FROM active_feed)

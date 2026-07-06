@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS gtfs.departures
     arrival_time     String,
     service_id       String,
     route_short_name String,
+    route_type       UInt16,
     route_desc       String,
     trip_headsign    String,
     stop_id          String,

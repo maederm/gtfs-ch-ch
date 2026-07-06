@@ -6,6 +6,7 @@ SELECT
     st.arrival_time AS arrival_time,
     t.service_id AS service_id,
     r.route_short_name AS route_short_name,
+    r.route_type AS route_type,
     r.route_desc AS route_desc,
     t.trip_headsign AS trip_headsign,
     st.stop_id AS stop_id,

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Departures</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" rel="stylesheet" integrity="sha384-CK2SzKma4jA5H/MXDUU7i1TqZlCFaD4T01vtyDFvPlD97JQyS+IsSh1nI2EFbpyk" crossorigin="anonymous">
 <style>
   .suggestions { position: absolute; top: 100%; left: 0; right: 0; z-index: 10; display: none; }
   .suggestions .list-group-item { cursor: pointer; }
@@ -333,6 +334,7 @@ function departureSQL(direction) {
 SELECT
     d.scheduled_departure_time AS scheduled,
     d.route_short_name AS route,
+    d.route_type AS route_type,
     d.route_desc AS type,
     d.trip_headsign AS direction,
     d.platform_code AS platform,
@@ -410,7 +412,7 @@ function renderTable(pastRows, nextRows) {
     tr.querySelector('.dep-time').textContent = state.relativeTime ? fmtRelative(scheduled) : fmtDateTime(scheduled);
     tr.querySelector('.dep-expected').textContent = state.relativeTime ? fmtRelative(expected) : fmtDateTime(expected);
     tr.querySelector('.dep-route').textContent = r.route || '';
-    tr.querySelector('.dep-type').textContent = r.type || '';
+    tr.querySelector('.dep-type').innerHTML = fmtType(r.route_type, r.type);
     tr.querySelector('.dep-direction').textContent = r.direction || '';
     tr.querySelector('.dep-platform').textContent = r.platform || '';
     tr.querySelector('.dep-delay').textContent = fmtDelay(r);
@@ -432,6 +434,21 @@ function renderTable(pastRows, nextRows) {
 
   el.innerHTML = '';
   el.appendChild(table);
+}
+
+function fmtType(routeType, routeDesc) {
+  const icon = routeType < 200 ? 'bi-train-front'
+    : routeType < 300 ? 'bi-bus-front'
+    : routeType < 500 ? 'bi-train-lightrail-front'
+    : routeType < 800 ? 'bi-bus-front'
+    : routeType < 1000 ? 'bi-train-lightrail-front'
+    : routeType < 1100 ? 'bi-water'
+    : routeType < 1200 ? 'bi-airplane'
+    : routeType < 1500 ? 'bi-chevron-bar-up'
+    : routeType < 1600 ? 'bi-taxi-front'
+    : null;
+  if (!icon) return routeDesc || '';
+  return `<i class="${icon}" title="${routeDesc}"></i>`;
 }
 
 function fmtDateTime(d) {
