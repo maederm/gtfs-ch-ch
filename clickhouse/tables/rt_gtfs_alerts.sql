@@ -3,9 +3,9 @@ CREATE TABLE IF NOT EXISTS gtfs_rt.alerts
     feed_version Date32,
     feed_timestamp         DateTime,
     entity_id              String,
-    cause                  String,
-    effect                 String,
-    severity_level         String,
+    cause                  LowCardinality(String),
+    effect                 LowCardinality(String),
+    severity_level         LowCardinality(String),
     header_text            String,
     description_text       String,
     active_period_start    Nullable(DateTime),
@@ -15,5 +15,5 @@ CREATE TABLE IF NOT EXISTS gtfs_rt.alerts
     informed_stop_ids      Array(String)
 )
 ENGINE = MergeTree()
-PARTITION BY toYYYYMM(feed_timestamp)
+PARTITION BY toYYYYMM(feed_version)
 ORDER BY (entity_id, feed_timestamp);

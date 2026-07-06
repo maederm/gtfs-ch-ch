@@ -5,10 +5,10 @@ CREATE TABLE IF NOT EXISTS gtfs_rt.raw_feed
     entity_id       String,
     tu_trip_id                 String,
     tu_route_id                String,
-    tu_direction_id            UInt32,
+    tu_direction_id            UInt8,
     tu_start_time              String,
     tu_start_date              String,
-    tu_schedule_relationship   String,
+    tu_schedule_relationship   LowCardinality(String),
     tu_stop_time_updates       Array(Tuple(
         stop_sequence          UInt32,
         stop_id                String,
@@ -28,12 +28,12 @@ CREATE TABLE IF NOT EXISTS gtfs_rt.raw_feed
     vp_speed                   Float32,
     vp_stop_id                 String,
     vp_current_stop_sequence   UInt32,
-    vp_current_status          String,
+    vp_current_status          LowCardinality(String),
     vp_timestamp               DateTime,
-    vp_occupancy_status        String,
-    alert_cause                String,
-    alert_effect               String,
-    alert_severity_level       String,
+    vp_occupancy_status        LowCardinality(String),
+    alert_cause                LowCardinality(String),
+    alert_effect               LowCardinality(String),
+    alert_severity_level       LowCardinality(String),
     alert_header_text          String,
     alert_description_text     String,
     alert_active_period_start  UInt64,
@@ -43,5 +43,5 @@ CREATE TABLE IF NOT EXISTS gtfs_rt.raw_feed
     alert_informed_entity_stop_ids    Array(String)
 )
 ENGINE = MergeTree()
-PARTITION BY toYYYYMM(feed_timestamp)
+PARTITION BY toYYYYMM(feed_version)
 ORDER BY (feed_timestamp, entity_id);

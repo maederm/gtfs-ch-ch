@@ -1,15 +1,15 @@
 CREATE TABLE IF NOT EXISTS gtfs.trips
 (
     feed_version Date32,
-    route_id         String,
+    route_id         LowCardinality(String),
     service_id       String,
     trip_id          String,
-    trip_headsign    String,
+    trip_headsign    LowCardinality(String),
     trip_short_name  String,
     direction_id     UInt8,
-    block_id         Nullable(String),
-    original_trip_id Nullable(String),
-    hints            Nullable(String)
+    block_id         String,
+    original_trip_id String,
+    hints            String
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(feed_version)

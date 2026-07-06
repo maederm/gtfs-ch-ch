@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS gtfs_rt.stop_time_updates
     arrival_time           Int64,
     departure_delay        Int32,
     departure_time         Int64,
-    schedule_relationship  String
+    schedule_relationship  LowCardinality(String)
 )
 ENGINE = MergeTree()
-PARTITION BY toYYYYMM(feed_timestamp)
+PARTITION BY toYYYYMM(feed_version)
 ORDER BY (feed_timestamp, trip_id, stop_id);

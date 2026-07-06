@@ -12,10 +12,10 @@ CREATE TABLE IF NOT EXISTS gtfs_rt.vehicle_positions
     speed                  Float32,
     stop_id                String,
     current_stop_sequence  UInt32,
-    current_status         String,
+    current_status         LowCardinality(String),
     timestamp              DateTime,
-    occupancy_status       String
+    occupancy_status       LowCardinality(String)
 )
 ENGINE = MergeTree()
-PARTITION BY toYYYYMM(feed_timestamp)
+PARTITION BY toYYYYMM(feed_version)
 ORDER BY (vehicle_id, feed_timestamp);
