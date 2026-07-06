@@ -81,6 +81,7 @@
 
 <script>
 const CH_URL = 'http://localhost:8123/';
+const ACTIVE_FEED = `least((SELECT max(feed_version) FROM gtfs.feed_info), (SELECT max(feed_version) FROM gtfs_rt.trip_updates))`;
 
 const state = {
   parentStation: '',
@@ -200,7 +201,7 @@ function sanitizeMarkOnly(html) {
 }
 
 function searchStations(q) {
-  const sql = `SELECT DISTINCT stop_id, stop_name, highlight(stop_name, splitByChar(' ', {search:String}), '<mark>', '</mark>') AS stop_name_hl FROM gtfs.stops WHERE location_type = '1' AND arrayAll(t -> stop_name ILIKE concat('%', t, '%'), splitByChar(' ', {search:String})) ORDER BY multiIf(stop_name ILIKE concat({search:String}, '%'), 1, stop_name ILIKE concat('% ', {search:String}, '%'), 2, 3), length(stop_name), stop_name LIMIT 15`;
+  const sql = `SELECT DISTINCT stop_id, stop_name, highlight(stop_name, splitByChar(' ', {search:String}), '<mark>', '</mark>') AS stop_name_hl FROM gtfs.stops WHERE location_type = '1' AND feed_version = (${ACTIVE_FEED}) AND arrayAll(t -> stop_name ILIKE concat('%', t, '%'), splitByChar(' ', {search:String})) ORDER BY multiIf(stop_name ILIKE concat({search:String}, '%'), 1, stop_name ILIKE concat('% ', {search:String}, '%'), 2, 3), length(stop_name), stop_name LIMIT 15`;
   chQuery(sql, { search: q }).then(rows => {
     suggestionsEl.innerHTML = '';
     activeIdx = -1;
@@ -244,7 +245,7 @@ function selectStation(stopId, name) {
 }
 
 function loadFilterOptions() {
-  const conditions = ['parent_station = {ps:String}', 'feed_version = (SELECT max(feed_version) FROM gtfs.feed_info)'];
+  const conditions = ['parent_station = {ps:String}', `feed_version = (${ACTIVE_FEED})`];
   const params = { ps: state.parentStation };
 
   const type = document.getElementById('filter-type').value;
@@ -352,21 +353,16 @@ function loadDepartures() {
     chQuery(past.sql, past.params),
     chQuery(next.sql, next.params),
     chQuery(`SELECT
-      toString(max(feed_version)) AS feed_version,
-      toString((SELECT max(feed_timestamp) FROM gtfs_rt.trip_updates)) AS feed_timestamp,
-      toString((SELECT feed_version FROM gtfs_rt.trip_updates ORDER BY feed_timestamp DESC LIMIT 1)) AS rt_feed_version
-    FROM gtfs.departures`),
+      toString(${ACTIVE_FEED}) AS feed_version,
+      toString((SELECT max(feed_timestamp) FROM gtfs_rt.trip_updates WHERE feed_version = (${ACTIVE_FEED}))) AS feed_timestamp`),
   ]).then(([pastRows, nextRows, metaRows]) => {
     pastRows.reverse();
     renderTable(pastRows, nextRows);
     statusEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
     document.getElementById('refresh-btn').classList.remove('d-none');
     const meta = metaRows[0] || {};
-    const rtText = meta.rt_feed_version === meta.feed_version
-      ? meta.feed_timestamp
-      : 'no matching real-time data';
     document.getElementById('feed-info').textContent =
-      `Feed: ${meta.feed_version || '?'} | RT: ${rtText}`;
+      `Feed: ${meta.feed_version || '?'} | RT: ${meta.feed_timestamp || '?'}`;
   }).catch(err => {
     const tpl = document.getElementById('error-message').content.cloneNode(true);
     tpl.querySelector('div').textContent = 'Error: ' + err.message;
