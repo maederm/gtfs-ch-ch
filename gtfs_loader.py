@@ -130,7 +130,7 @@ def load_table(cfg, zip_path, table, csv_file, feed_version):
         select_params = {"feed_version": feed_version, "file_arg": file_arg}
 
     query = (
-        "INSERT INTO FUNCTION remote({remote:String}, {db:String}, {table:String}) "
+        "INSERT INTO FUNCTION remote({remote:String}, {db:String}, {table:String}, {user:String}, {password:String}) "
         + select
         + " SETTINGS date_time_input_format='best_effort', input_format_csv_empty_as_default=1"
     )
@@ -138,6 +138,8 @@ def load_table(cfg, zip_path, table, csv_file, feed_version):
         "remote": f"{cfg.ch_host}:{cfg.ch_port}",
         "db": "gtfs",
         "table": table,
+        "user": environ.get("CLICKHOUSE_USER", "default"),
+        "password": environ.get("CLICKHOUSE_PASSWORD", ""),
         **select_params,
     }
     run(with_ch_params([cfg.ch_local, "-q", query], params), check=True)
