@@ -316,11 +316,6 @@ function loadFilterOptions() {
 
 // --- Departures ---
 
-function nowTimeStr() {
-  const d = new Date();
-  const h = d.getHours() < 4 ? d.getHours() + 24 : d.getHours();
-  return [h, d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
-}
 
 function serviceDate() {
   const now = new Date();
@@ -346,11 +341,11 @@ SELECT
     d.expected_departure_time AS expected
 FROM gtfs.departures_rt_view(date = {service_date:Date32}, parent_station = {parent_station:String}) d
 WHERE ${where}
-  d.departure_time ${op} {now_time:String}
-ORDER BY d.departure_time ${order}
+  d.expected_departure_time ${op} now()
+ORDER BY d.expected_departure_time ${order}
 LIMIT ${limit}`;
 
-  return { sql, params: { ...params, now_time: nowTimeStr(), service_date: serviceDate() } };
+  return { sql, params: { ...params, service_date: serviceDate() } };
 }
 
 function loadDepartures() {
